@@ -454,11 +454,15 @@ class DivOp(Op):
         """Return the element-wise division of input values."""
         assert len(input_values) == 2
         """TODO: your code here"""
+        return input_values[0] / input_values[1]
     
 
     def gradient(self, node: Node, output_grad: Node) -> List[Node]:
         """Given gradient of division node, return partial adjoint to each input."""
         """TODO: your code here"""
+        grad_A = output_grad / node.inputs[1]
+        grad_B = (-1 * output_grad * node.inputs[0]) / (node.inputs[1] * node.inputs[1])
+        return [grad_A, grad_B]
 
 class DivByConstOp(Op):
     """Op to element-wise divide a nodes by a constant."""
@@ -475,10 +479,13 @@ class DivByConstOp(Op):
         """Return the element-wise division of the input value and the constant."""
         assert len(input_values) == 1
         """TODO: your code here"""
+        return input_values[0] / node.constant
 
     def gradient(self, node: Node, output_grad: Node) -> List[Node]:
         """Given gradient of division node, return partial adjoint to the input."""
         """TODO: your code here"""
+        return [output_grad / node.constant]
+
 
 class TransposeOp(Op):
     """Op to transpose a matrix."""
@@ -499,10 +506,18 @@ class TransposeOp(Op):
         """
         assert len(input_values) == 1
         """TODO: your code here"""
+        dim0 = node.dim0
+        dim1 = node.dim1
+        transposed_tensor = input_values.transpose(dim0, dim1)
+        return transposed_tensor
+
 
     def gradient(self, node: Node, output_grad: Node) -> List[Node]:
         """Given gradient of transpose node, return partial adjoint to input."""
         """TODO: your code here"""
+        dim0 = node.dim0
+        dim1 = node.dim1
+        return [transpose(output_grad, dim0, dim1)]
 
 class MatMulOp(Op):
     """Matrix multiplication op of two nodes."""
@@ -598,10 +613,17 @@ class ReLUOp(Op):
         """Return ReLU of input."""
         assert len(input_values) == 1
         """TODO: your code here"""
+        relu_value = torch.nn.functional.relu(input_values)
+        return relu_value
 
     def gradient(self, node: Node, output_grad: Node) -> List[Node]:
         """Given gradient of ReLU node, return partial adjoint to input."""
         """TODO: your code here"""
+        zero_node = zeros_like(node)
+        mask_node = greater(node, zero_node)
+        return [output_grad * mask_node] # only have gradients where original values are positive 
+        
+
 
 class SqrtOp(Op):
     """Op to compute element-wise square root."""
@@ -616,9 +638,12 @@ class SqrtOp(Op):
     def compute(self, node: Node, input_values: List[torch.Tensor]) -> torch.Tensor:
         assert len(input_values) == 1
         """TODO: your code here"""
+        return torch.sqrt(input_values)
 
     def gradient(self, node: Node, output_grad: Node) -> List[Node]:
         """TODO: your code here"""
+        grad = 0.5 * output_grad
+        return [div(grad, node)]
 
 class PowerOp(Op):
     """Op to compute element-wise power."""
@@ -634,9 +659,12 @@ class PowerOp(Op):
     def compute(self, node: Node, input_values: List[torch.Tensor]) -> torch.Tensor:
         assert len(input_values) == 1
         """TODO: your code here"""
+        return torch.pow(input_values, node.exponent)
 
     def gradient(self, node: Node, output_grad: Node) -> List[Node]:
         """TODO: your code here"""
+        grad = node.exponent * output_grad
+        return [grad * power(node, node.exponent - 1)]
 
 class MeanOp(Op):
     """Op to compute mean along specified dimensions.
@@ -653,9 +681,22 @@ class MeanOp(Op):
     def compute(self, node: Node, input_values: List[torch.Tensor]) -> torch.Tensor:
         assert len(input_values) == 1
         """TODO: your code here"""
+        return input_values[0].mean(dim=node.dim, keepdim=node.keepdim)
 
     def gradient(self, node: Node, output_grad: Node) -> List[Node]:
         """TODO: your code here"""
+        dim = node.dim
+        keepdim = node.keepdim
+        ones = ones_like(node.inputs[0])
+        count = sum_op(ones, dim=dim, keepdim=keepdim)
+        grad = output_grad / count
+
+        if not keepdim:
+            grad = expand_as_3d(grad, node.inputs[0])
+        
+        return [grad]
+
+
 
 # Create global instances of ops.
 # Your implementation should just use these instances, rather than creating new instances.
