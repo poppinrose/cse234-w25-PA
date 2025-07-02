@@ -549,10 +549,14 @@ class MatMulOp(Op):
         """Return the matrix multiplication result of input values."""
         assert len(input_values) == 2
         """TODO: your code here"""
+        return torch.matmul(input_values[0], input_values[1])
 
     def gradient(self, node: Node, output_grad: Node) -> List[Node]:
         """Given gradient of matmul node, return partial adjoint to each input."""
         """TODO: your code here"""
+        grad_A = matmul(output_grad, node.inputs[1])
+        grad_B = matmul(transpose(node.inputs[0]), output_grad) # we piece out the shape
+
 
 
 class SoftmaxOp(Op):
@@ -570,10 +574,20 @@ class SoftmaxOp(Op):
         """Return softmax of input along specified dimension."""
         assert len(input_values) == 1
         """TODO: your code here"""
+        dim = node.dim
+        return torch.softmax(input_values, dim=dim)
 
     def gradient(self, node: Node, output_grad: Node) -> List[Node]:
         """Given gradient of softmax node, return partial adjoint to input."""
         """TODO: your code here"""
+        # the formulation is in softmax.md
+        dim = node.dim
+        s = sum_op(output_grad * node, dim=dim, keepdim=True) # gradients from other indices
+        s = expand_as(s, output_grad)
+        grad = node * (output_grad - s)
+        return [grad]
+
+
 
 
 class LayerNormOp(Op):
