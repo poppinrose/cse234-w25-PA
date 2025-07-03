@@ -605,6 +605,10 @@ class LayerNormOp(Op):
         """Return layer normalized input."""
         assert len(input_values) == 1
         """TODO: your code here"""
+        normalized_shape = node.normalized_shape
+        eps = node.eps
+        return torch.layer_norm(input_values, normalized_shape=normalized_shape, eps=eps)
+
 
     def gradient(self, node: Node, output_grad: Node) -> List[Node]:
         """
@@ -612,6 +616,30 @@ class LayerNormOp(Op):
         adjoint (gradient) wrt the input x.
         """
         """TODO: your code here"""
+        x = node.inputs[0]
+        normalized_shape = node.normalized_shape
+        eps = node.eps
+        dims = tuple(range(-len(normalized_shape), 0))
+        # calculate the mean of x
+        x_mean = mean(x, dim=dims, keepdim=True) # shape of dims reduced to 1]
+        x_mean = expand_as(x_mean, x)
+        x_minus_mean = x - x_mean
+        x_var = mean(x_minus_mean * x_minus_mean, dim=dims, keepdim=True)
+        x_var = expand_as(x_var, x)
+        x_std = sqrt(x_var + eps)
+        term1 = output_grad
+        term2 = mean(output_grad, dim=dims, keepdim=True)
+        term2 = expand_as(term2, x)
+        term3 = mean(output_grad * x_minus_mean, dim=dims, keepdim=True)
+        term3 = expand_as(term3, x)
+        term3_scalar = (x_minus_mean / (x_var + eps))
+        term3 = term3_scalar * term3
+        grad = (term1 - term2 - term3) / x_std
+
+        return [grad]
+
+
+
 
 class ReLUOp(Op):
     """ReLU activation function."""
