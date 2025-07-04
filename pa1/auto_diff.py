@@ -508,13 +508,14 @@ class TransposeOp(Op):
         """TODO: your code here"""
         dim0 = node.dim0
         dim1 = node.dim1
-        transposed_tensor = input_values.transpose(dim0, dim1)
+        transposed_tensor = input_values[0].transpose(dim0, dim1)
         return transposed_tensor
 
 
     def gradient(self, node: Node, output_grad: Node) -> List[Node]:
         """Given gradient of transpose node, return partial adjoint to input."""
         """TODO: your code here"""
+        # we just transpose the gradients back
         dim0 = node.dim0
         dim1 = node.dim1
         return [transpose(output_grad, dim0, dim1)]
@@ -575,7 +576,7 @@ class SoftmaxOp(Op):
         assert len(input_values) == 1
         """TODO: your code here"""
         dim = node.dim
-        return torch.softmax(input_values, dim=dim)
+        return torch.softmax(input_values[0], dim=dim)
 
     def gradient(self, node: Node, output_grad: Node) -> List[Node]:
         """Given gradient of softmax node, return partial adjoint to input."""
@@ -607,7 +608,7 @@ class LayerNormOp(Op):
         """TODO: your code here"""
         normalized_shape = node.normalized_shape
         eps = node.eps
-        return torch.layer_norm(input_values, normalized_shape=normalized_shape, eps=eps)
+        return torch.layer_norm(input_values[0], normalized_shape=normalized_shape, eps=eps)
 
 
     def gradient(self, node: Node, output_grad: Node) -> List[Node]:
@@ -655,7 +656,7 @@ class ReLUOp(Op):
         """Return ReLU of input."""
         assert len(input_values) == 1
         """TODO: your code here"""
-        relu_value = torch.nn.functional.relu(input_values)
+        relu_value = torch.nn.functional.relu(input_values[0])
         return relu_value
 
     def gradient(self, node: Node, output_grad: Node) -> List[Node]:
@@ -680,7 +681,7 @@ class SqrtOp(Op):
     def compute(self, node: Node, input_values: List[torch.Tensor]) -> torch.Tensor:
         assert len(input_values) == 1
         """TODO: your code here"""
-        return torch.sqrt(input_values)
+        return torch.sqrt(input_values[0])
 
     def gradient(self, node: Node, output_grad: Node) -> List[Node]:
         """TODO: your code here"""
@@ -701,7 +702,7 @@ class PowerOp(Op):
     def compute(self, node: Node, input_values: List[torch.Tensor]) -> torch.Tensor:
         assert len(input_values) == 1
         """TODO: your code here"""
-        return torch.pow(input_values, node.exponent)
+        return torch.pow(input_values[0], node.exponent)
 
     def gradient(self, node: Node, output_grad: Node) -> List[Node]:
         """TODO: your code here"""
@@ -815,6 +816,13 @@ class Evaluator:
             The list of values for nodes in `eval_nodes` field.
         """
         """TODO: your code here"""
+        # determine whether values are complete
+        for node in self.eval_nodes:
+            for node_temp in node.inputs:
+                if input_values.get(node_temp) is None:
+                    raise ValueError("lacks enough input values!")
+        
+
 
 
 def gradients(output_node: Node, nodes: List[Node]) -> List[Node]:
