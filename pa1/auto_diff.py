@@ -782,6 +782,33 @@ def topological_sort(nodes):
         Nodes in topological order
     """
     """TODO: your code here"""
+    # we assume the nodes here are all of the forward pass nodes, they are fully connected
+    if not isinstance(nodes, list):
+        nodes = [nodes]
+
+    visited = set()
+    topo_list = []
+
+
+    def dfs(node):
+        if node in visited:
+            return
+        visited.add(node)
+        if len(node.inputs) > 0:
+            for inp in node.inputs:
+                dfs(inp)
+        
+        # after the inputs are processed, we then let a node in, this is the definition of topological
+        topo_list.append(node)
+    
+    for node in nodes:
+        dfs(node)
+    
+    return topo_list
+    
+
+
+
 
 class Evaluator:
     """The node evaluator that computes the values of nodes in a computational graph."""
@@ -816,14 +843,45 @@ class Evaluator:
             The list of values for nodes in `eval_nodes` field.
         """
         """TODO: your code here"""
-        # determine whether values are complete
-        for node in self.eval_nodes:
-            for node_temp in node.inputs:
-                if input_values.get(node_temp) is None:
-                    raise ValueError("lacks enough input values!")
+        node_to_value = {}
+        all_nodes = get_forward_graph_nodes(self.eval_nodes)
+        node_process_queue = topological_sort(all_nodes)
+
+        for node in node_process_queue:
+            # corner case
+            if isinstance(node.op, PlaceholderOp):
+                if node not in input_values:
+                    raise ValueError(f"node {node.name} has no value")
+                node_to_value[node] = input_values[node]
+                continue
+            input_value = [node_to_value[inp] for inp in node.inputs]
+            node_to_value[node] = node.op.compute(node, input_value)
         
+        return [node_to_value[eval_node] for eval_node in self.eval_nodes]
 
 
+def get_forward_graph_nodes(nodes):
+
+    if not isinstance(nodes, list):
+        nodes = [nodes]
+
+    visited = set()
+    
+    def dfs(node):
+        if node in visited:
+            return
+        
+        visited.add(node)
+
+        if len(node.inputs) > 0:
+            for inp in node.inputs:
+                dfs(inp)
+    
+    for node in nodes:
+        dfs(node)
+    
+    return list(visited)
+        
 
 def gradients(output_node: Node, nodes: List[Node]) -> List[Node]:
     """Construct the backward computational graph, which takes gradient
@@ -844,3 +902,30 @@ def gradients(output_node: Node, nodes: List[Node]) -> List[Node]:
         A list of gradient nodes, one for each input nodes respectively.
     """
     """TODO: your code here"""
+
+    node_to_grad = {} # node to their respective grad node
+    return_list = []
+    node_to_grad[output_node] = ones_like(output_node)
+    all_nodes = get_forward_graph_nodes(output_node)
+    node_process_queue = topological_sort(all_nodes)[::-1] # ensuring that the grad is complete before we call op.gradient func
+
+    def update_grad(node, grad):
+        if node_to_grad.get(node) is None:
+            node_to_grad[node] = grad
+        else:
+            node_to_grad[node] = node_to_grad[node] + grad
+
+    for cur_node in node_process_queue:
+        if isinstance(cur_node.op, PlaceholderOp):
+            continue # corner case
+
+        # the gradient is destined to be complete since we use reverse topological order
+        partial_grad_nodes = cur_node.op.gradient(cur_node, node_to_grad[cur_node])
+
+        for input_node, partial_grad_node in zip(cur_node.inputs, partial_grad_nodes):
+            update_grad(input_node, partial_grad_node)
+    
+    return [node_to_grad.get(node, zeros_like(node)) for node in nodes]
+
+
+
