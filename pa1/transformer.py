@@ -13,6 +13,27 @@ from torchvision import datasets, transforms
 
 max_len = 28
 
+def linear_layer(X: ad.Node, w: ad.Node, b: ad.Node) -> ad.Node:
+    # mainly used for classifier head
+    output_node = ad.matmul(node_A=X, node_B=w) + b
+    return output_node
+
+def mlp(X: ad.Node, w1: ad.Node, w2: ad.Node) -> ad.Node:
+    X1 = ad.matmul(X, w1)
+    X_activated = ad.relu(X1)
+    return ad.matmul(X_activated, w2)
+
+def self_attention(X: ad.Node, wq: ad.Node, wk: ad.Node, wv: ad.Node, wo: ad.Node, model_dim: int) -> ad.Node:
+    Q = ad.matmul(node_A=X, node_B=wq)
+    K = ad.matmul(node_A=X, node_B=wk)
+    V = ad.matmul(node_A=X, node_B=wv)
+    S = ad.matmul(Q, ad.transpose(K, dim0=-1, dim1=-2)) / ad.sqrt(model_dim) # Q @ K^T / sqrt(dk)
+    S_prob = ad.softmax(node_A=S, dim=-1)
+    O = ad.matmul(node_A=ad.matmul(node_A=S_prob, node_B=V), node_B=wo)
+    return O
+
+
+
 def transformer(X: ad.Node, nodes: List[ad.Node], 
                       model_dim: int, seq_length: int, eps, batch_size, num_classes) -> ad.Node:
     """Construct the computational graph for a single transformer layer with sequence classification.
