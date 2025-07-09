@@ -549,15 +549,25 @@ class MatMulOp(Op):
     def compute(self, node: Node, input_values: List[torch.Tensor]) -> torch.Tensor:
         """Return the matrix multiplication result of input values."""
         assert len(input_values) == 2
+        shape1 = input_values[0].shape
+        shape2 = input_values[1].shape
+        if len(shape1) == 2 and len(shape2) == 2:
+            if shape2[0] != shape1[1]:
+                input_values[1] = input_values[1].transpose(1, 0)
+        elif len(shape1) == 3 and len(shape2) == 3:
+            # we ignore th batch dimension
+            if shape2[1] != shape1[2]:
+                input_values[1] = input_values[1].transpose(2, 1)
+
         """TODO: your code here"""
         return torch.matmul(input_values[0], input_values[1])
 
     def gradient(self, node: Node, output_grad: Node) -> List[Node]:
         """Given gradient of matmul node, return partial adjoint to each input."""
         """TODO: your code here"""
-        grad_A = matmul(output_grad, node.inputs[1])
-        grad_B = matmul(transpose(node.inputs[0]), output_grad) # we piece out the shape
-
+        grad_A = matmul(output_grad, transpose(node.inputs[1], dim0=-1, dim1=-2)) # we piece out the shape
+        grad_B = matmul(transpose(node.inputs[0], dim0=-1, dim1=-2), output_grad) # we piece out the shape
+        return [grad_A, grad_B]
 
 
 class SoftmaxOp(Op):
@@ -707,7 +717,7 @@ class PowerOp(Op):
     def gradient(self, node: Node, output_grad: Node) -> List[Node]:
         """TODO: your code here"""
         grad = node.exponent * output_grad
-        return [grad * power(node, node.exponent - 1)]
+        return [grad * power(node.inputs[0], node.exponent - 1)]
 
 class MeanOp(Op):
     """Op to compute mean along specified dimensions.
