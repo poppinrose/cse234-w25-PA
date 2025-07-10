@@ -13,9 +13,9 @@ from torchvision import datasets, transforms
 
 max_len = 28
 
-def linear_layer(X: ad.Node, w: ad.Node, b: ad.Node) -> ad.Node:
+def linear_layer(X: ad.Node, w: ad.Node) -> ad.Node:
     # mainly used for classifier head
-    output_node = ad.matmul(node_A=X, node_B=w) + b
+    output_node = ad.matmul(node_A=X, node_B=w)
     return output_node
 
 def mlp(X: ad.Node, w1: ad.Node, w2: ad.Node) -> ad.Node:
@@ -35,7 +35,7 @@ def self_attention(X: ad.Node, wq: ad.Node, wk: ad.Node, wv: ad.Node, wo: ad.Nod
 
 
 def transformer(X: ad.Node, nodes: List[ad.Node], 
-                      model_dim: int, seq_length: int, eps, batch_size, num_classes) -> ad.Node:
+                      D: int, L: int, eps, B, num_classes) -> ad.Node:
     """Construct the computational graph for a single transformer layer with sequence classification.
 
     Parameters
@@ -44,9 +44,9 @@ def transformer(X: ad.Node, nodes: List[ad.Node],
         A node in shape (batch_size, seq_length, model_dim), denoting the input data.
     nodes: List[ad.Node]
         Nodes you would need to initialize the transformer.
-    model_dim: int
+    D: int
         Dimension of the model (hidden size).
-    seq_length: int
+    L: int
         Length of the input sequence.
 
     Returns
@@ -56,6 +56,17 @@ def transformer(X: ad.Node, nodes: List[ad.Node],
     """
 
     """TODO: Your code here"""
+    wq, wk, wv, wo, w1, w2, wc = nodes
+    residual = X
+    ln1_normed_X = ad.layernorm(node_A=X, normalized_shape=[D], eps=eps)
+    self_attn_X = self_attention(X=ln1_normed_X, wq=wq, wk=wk, wv=wv, wo=wo, model_dim=D) + residual # residual
+    residual = self_attn_X # update residual
+    ln2_normed_X = ad.layernorm(node_A=self_attn_X, normalized_shape=[D], eps=eps)
+    mlp_X = mlp(X=ln2_normed_X, w1=w1, w2=w2) + residual # 2nd residual
+    classified_X = linear_layer(X=mlp_X, w=wc)
+    return ad.mean(node_A=classified_X, dim=(1), keepdim=False)
+    
+
 
 
 def softmax_loss(Z: ad.Node, y_one_hot: ad.Node, batch_size: int) -> ad.Node:
@@ -90,6 +101,12 @@ def softmax_loss(Z: ad.Node, y_one_hot: ad.Node, batch_size: int) -> ad.Node:
     Try to think about why our softmax loss may need the batch size.
     """
     """TODO: Your code here"""
+    softmax_Z = ad.softmax(Z, dim=-1)
+    log_softmax_Z = ad.log(softmax_Z)
+    term = y_one_hot * log_softmax_Z
+    sumed_term = ad.sum_op(node_A=term, dim=(0, 1), keepdim=False)
+    loss = (-1 / batch_size) * sumed_term
+    return loss
 
 
 
@@ -158,6 +175,7 @@ def sgd_epoch(
         # Compute forward and backward passes
         # TODO: Your code here
 
+
         
         # Update weights and biases
         # TODO: Your code here
@@ -200,16 +218,26 @@ def train_model():
     lr = 0.02
 
     # TODO: Define the forward graph.
+    wq = ad.Variable(name="wq")
+    wk = ad.Variable(name="wk")
+    wv = ad.Variable(name="wv")
+    wo = ad.Variable(name="wo")
+    w1 = ad.Variable(name="w1")
+    w2 = ad.Variable(name="w2")
+    wc = ad.Variable(name="wc")
+    X = ad.Variable(name='X')
 
-    y_predict: ad.Node = ... # TODO: The output of the forward pass
+    nodes = [wq, wk, wv, wo, w1, w2, wc]
+
+
+    y_predict: ad.Node = transformer(X=X, nodes=nodes, D=model_dim, L=seq_length, eps=eps, B=batch_size, num_classes=num_classes)
     y_groundtruth = ad.Variable(name="y")
     loss: ad.Node = softmax_loss(y_predict, y_groundtruth, batch_size)
     
     # TODO: Construct the backward graph.
-    
 
     # TODO: Create the evaluator.
-    grads: List[ad.Node] = ... # TODO: Define the gradient nodes here
+    grads: List[ad.Node] = ad.gradients(output_node=loss, nodes=nodes) # TODO: Define the gradient nodes here
     evaluator = ad.Evaluator([y_predict, loss, *grads])
     test_evaluator = ad.Evaluator([y_predict])
 
@@ -244,24 +272,32 @@ def train_model():
     # Initialize model weights.
     np.random.seed(0)
     stdv = 1.0 / np.sqrt(num_classes)
+    # I do not use bias, as I see no benefits here
     W_Q_val = np.random.uniform(-stdv, stdv, (input_dim, model_dim))
     W_K_val = np.random.uniform(-stdv, stdv, (input_dim, model_dim))
     W_V_val = np.random.uniform(-stdv, stdv, (input_dim, model_dim))
     W_O_val = np.random.uniform(-stdv, stdv, (model_dim, model_dim))
     W_1_val = np.random.uniform(-stdv, stdv, (model_dim, model_dim))
-    W_2_val = np.random.uniform(-stdv, stdv, (model_dim, num_classes))
-    b_1_val = np.random.uniform(-stdv, stdv, (model_dim,))
-    b_2_val = np.random.uniform(-stdv, stdv, (num_classes,))
+    W_2_val = np.random.uniform(-stdv, stdv, (model_dim, model_dim))
+    W_C_val = np.random.uniform(-stdv, stdv, (model_dim, num_classes))
 
-    def f_run_model(model_weights):
+    def f_run_model(X_run, model_weights):
         """The function to compute the forward and backward graph.
         It returns the logits, loss, and gradients for model weights.
+
+        By default the X is a minibatch
         """
         result = evaluator.run(
             input_values={
                 # TODO: Fill in the mapping from variable to tensor
-
-
+                X : X_run,
+                wq : model_weights[0],
+                wk : model_weights[1],
+                wv : model_weights[2],
+                wo : model_weights[3],
+                w1 : model_weights[4],
+                w2 : model_weights[5],
+                wc : model_weights[6],
             }
         )
         return result
@@ -280,8 +316,14 @@ def train_model():
             X_batch = X_val[start_idx:end_idx, :max_len]
             logits = test_evaluator.run({
                 # TODO: Fill in the mapping from variable to tensor
-
-
+                X : X_batch,
+                wq : model_weights[0],
+                wk : model_weights[1],
+                wv : model_weights[2],
+                wo : model_weights[3],
+                w1 : model_weights[4],
+                w2 : model_weights[5],
+                wc : model_weights[6],
             })
             all_logits.append(logits[0])
         # Concatenate all logits and return the predicted classes
