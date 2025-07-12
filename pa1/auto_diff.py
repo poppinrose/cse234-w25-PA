@@ -371,7 +371,10 @@ class ExpandAsOp3d(Op):
         """Return the broadcasted tensor."""
         assert len(input_values) == 2
         input_tensor, target_tensor = input_values
-        print('expand_op',input_tensor.shape, target_tensor.shape)
+        # print('expand_op',input_tensor.shape, target_tensor.shape)
+        # first broadcast
+        if input_tensor.dim() == 0:
+            input_tensor = input_tensor.unsqueeze(0)
         return input_tensor.unsqueeze(1).expand_as(target_tensor)
 
     def gradient(self, node: Node, output_grad: Node) -> List[Node]:
@@ -558,6 +561,9 @@ class MatMulOp(Op):
             # we ignore th batch dimension
             if shape2[1] != shape1[2]:
                 input_values[1] = input_values[1].transpose(2, 1)
+        elif len(shape1) == 3 and len(shape2) == 2:
+            if shape2[0] != shape1[2]:
+                input_values[1] = input_values[1].transpose(1, 0)
 
         """TODO: your code here"""
         return torch.matmul(input_values[0], input_values[1])
@@ -745,9 +751,9 @@ class MeanOp(Op):
         grad = output_grad / count
 
         if not keepdim:
-            grad = expand_as_3d(grad, node.inputs[0])
+            reshape_grad = expand_as_3d(grad, node.inputs[0])
         
-        return [grad]
+        return [reshape_grad]
 
 
 
