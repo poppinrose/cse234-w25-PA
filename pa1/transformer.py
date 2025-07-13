@@ -179,7 +179,7 @@ def sgd_epoch(
         # TODO: Your code here
         # we should change X_batch shape to B, L, D
         B, H, W = X_batch.shape
-        X_batch = X_batch.view(B, H * W, 1)
+        # X_batch = X_batch.view(B, H * W, 1)
         y_pred_value, loss_value, *grad_values = f_run_model(X_batch, y_batch, model_weights)
 
         
@@ -223,13 +223,13 @@ def train_model():
     input_dim = 28  # Each row of the MNIST image
     seq_length = max_len  # Number of rows in the MNIST image
     num_classes = 10 #
-    model_dim = 64 #
-    eps = 1e-5 
+    model_dim = 128 #
+    eps = 1e-5
 
     # - Set up the training settings.
     num_epochs = 20
-    batch_size = 100
-    lr = 0.02
+    batch_size = 50
+    lr = 0.01
 
     # TODO: Define the forward graph.
     wp = ad.Variable(name="wp")
@@ -288,7 +288,7 @@ def train_model():
     np.random.seed(0)
     stdv = 1.0 / np.sqrt(num_classes)
     # I do not use bias, as I see no benefits here
-    W_P_val = np.random.uniform(-stdv, stdv, (1, model_dim))
+    W_P_val = np.random.uniform(-stdv, stdv, (input_dim, model_dim))
     W_Q_val = np.random.uniform(-stdv, stdv, (model_dim, model_dim))
     W_K_val = np.random.uniform(-stdv, stdv, (model_dim, model_dim))
     W_V_val = np.random.uniform(-stdv, stdv, (model_dim, model_dim))
@@ -333,7 +333,7 @@ def train_model():
             if start_idx + batch_size> num_examples:continue
             end_idx = min(start_idx + batch_size, num_examples)
             X_batch = X_val[start_idx:end_idx, :max_len]
-            X_batch = X_batch.view(X_batch.shape[0], X_batch.shape[1] * X_batch.shape[1], 1)
+            # X_batch = X_batch.view(X_batch.shape[0], X_batch.shape[1] * X_batch.shape[1], 1)
 
             logits = test_evaluator.run({
                 # TODO: Fill in the mapping from variable to tensor
