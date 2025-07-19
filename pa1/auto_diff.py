@@ -566,7 +566,7 @@ class MatMulOp(Op):
                 input_values[1] = input_values[1].transpose(1, 0)
 
         """TODO: your code here"""
-        return torch.matmul(input_values[0], input_values[1])
+        return input_values[0] @ input_values[1]
 
     def gradient(self, node: Node, output_grad: Node) -> List[Node]:
         """Given gradient of matmul node, return partial adjoint to each input."""
@@ -592,7 +592,11 @@ class SoftmaxOp(Op):
         assert len(input_values) == 1
         """TODO: your code here"""
         dim = node.dim
-        return torch.softmax(input_values[0], dim=dim)
+        max_values = torch.max(input_values[0], dim=dim, keepdim=True).values
+        normalized_input = input_values[0] - max_values  # for numerical stability, here occurs automatic broadcasting
+        exp_value = torch.exp(normalized_input)
+        denominator = torch.sum(exp_value, dim=dim, keepdim=True)
+        return exp_value / denominator
 
     def gradient(self, node: Node, output_grad: Node) -> List[Node]:
         """Given gradient of softmax node, return partial adjoint to input."""
@@ -624,7 +628,10 @@ class LayerNormOp(Op):
         """TODO: your code here"""
         normalized_shape = node.normalized_shape
         eps = node.eps
-        return torch.layer_norm(input_values[0], normalized_shape=normalized_shape, eps=eps)
+        mean = input_values[0].mean(dim=tuple(range(-len(normalized_shape), 0)), keepdim=True)
+        var = torch.mean((input_values[0] - mean) ** 2, dim=tuple(range(-len(normalized_shape), 0)), keepdim=True)
+        std = torch.sqrt(var + eps)
+        return (input_values[0] - mean) / std
 
 
     def gradient(self, node: Node, output_grad: Node) -> List[Node]:
@@ -672,7 +679,8 @@ class ReLUOp(Op):
         """Return ReLU of input."""
         assert len(input_values) == 1
         """TODO: your code here"""
-        relu_value = torch.nn.functional.relu(input_values[0])
+        relu_values = torch.zeros_like(input_values[0])
+        relu_value = torch.where(input_values[0] > 0, input_values[0], relu_values)
         return relu_value
 
     def gradient(self, node: Node, output_grad: Node) -> List[Node]:

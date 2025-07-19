@@ -168,7 +168,7 @@ if __name__ == "__main__":
                 ((512, 256), (256, 512)),  # Medium
                 ((1024, 512), (512, 1024)) # Large
             ],
-            num_runs=100
+            num_runs=1000
         ),
         TestCase(
             name="3D Batch Matrix Multiplication",
@@ -177,7 +177,7 @@ if __name__ == "__main__":
                 ((64, 256, 128), (64, 128, 256)),    # Medium batch
                 ((128, 512, 256), (128, 256, 512))   # Large batch
             ],
-            num_runs=50
+            num_runs=1000
         ),
     ]
 
